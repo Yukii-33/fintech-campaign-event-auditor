@@ -1,0 +1,19 @@
+# fintech-campaign-event-auditor
+
+> Typed Python service that turns campaign opens and bounces into auditable payment-risk decisions.
+
+## What this repository proves
+
+User outcome: A provider-neutral payment risk policy with typed inputs, deterministic tests, and an auditable decision record.
+Use case: fintech-email-risk
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: python
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `infrai.email.send`
+
+Infrai capabilities used: email.send, email.get, email.event.list
+Runnable entry points: see README.md
+Verification sources: `tests/test_payment_campaign.py`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt

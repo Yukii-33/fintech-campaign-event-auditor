@@ -1,0 +1,2 @@
+"""Fintech campaign event auditor."""
+
