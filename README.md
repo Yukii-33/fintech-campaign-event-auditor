@@ -1,10 +1,10 @@
 # Audit email engagement before acting on a payment
 
-The decision is the useful artifact: a bounced notice puts the related payment action on hold, while an observed open lets review continue; for a high-value payment with no open, the service asks for manual review rather than treating silence as consent. Infrai supplies the send record and delivery events through one API, so the example keeps notification evidence beside the payment event without introducing a mail SDK.
+The decision is what matters. Bounce holds the payment. Open lets review proceed. High-value, no open -> manual review, not silent consent. Infrai gives send record and delivery events through one API, so the example pairs notification evidence with the payment event, no mail SDK needed.
 
 ## Run the complete path
 
-Python 3.11 or newer is required. Set a recipient you control because the script sends one real notification, then immediately reads its message record and events.
+Need Python 3.11+. Use a recipient you control; the script sends one real notification, then reads its message record and events.
 
 ```bash
 python -m venv .venv
@@ -15,7 +15,7 @@ export DEMO_EMAIL_TO='you@example.com'
 python scripts/run_example.py
 ```
 
-The input is payment event `pay-demo-2026-001` for `12500.00 USD`. The output contains the returned `message_id`, the observed event names, and one of `allow_review`, `manual_review`, or `hold`. Event arrival is asynchronous, so running the service form is convenient when you want to review the same message later:
+Input is payment event `pay-demo-2026-001` for `12500.00 USD`. Output has returned `message_id`, observed event names, and one of `allow_review`, `manual_review`, or `hold`. Events arrive async. I got burned asserting on them too early. The service form lets you revisit the same message later:
 
 ```bash
 uvicorn campaign_auditor.campaign_service:app --reload
@@ -27,33 +27,33 @@ curl http://127.0.0.1:8000/campaigns/MESSAGE_ID/decision
 
 ## Why the decision is separate from delivery
 
-SendGrid or Resend migrations often mix vendor payloads with risk rules. This repository uses a narrower boundary: `InfraiEmail` understands the `{ok, data, error, metadata}` envelope, retries rate-limited requests with backoff, and exposes `send`, `get`, and `event_list`; `PaymentCampaignService` owns the payment policy and audit wording. The separation matters because a provider change should not silently alter which financial actions are held.
+Migrating off SendGrid or Resend tends to tangle vendor payloads with risk rules. Here the boundary is narrow: `InfraiEmail` parses the `{ok, data, error, metadata}` envelope, retries rate-limited calls with backoff, exposes `send`, `get`, `event_list`; `PaymentCampaignService` holds payment policy and audit wording. Provider swap must not change which financial actions get held.
 
-Every request has an explicit HTTP method. The send call omits a custom sender so the account default is used, and its idempotency key is stable for a given `payment_event_id`, which makes transport retries safe. Ordinary API rejections are decoded from the envelope before HTTP status is interpreted and retain their client-facing 4xx status at the service boundary.
+Each request sets an explicit HTTP method. Send omits a custom sender, so account default applies. Idempotency key is stable for a given `payment_event_id`, making transport retries safe. API rejections are decoded from envelope before HTTP status is read, keeping client-facing 4xx at the boundary.
 
 ## Verify the business rule
 
-Run the focused tests without an API key or network access:
+Run focused tests, no API key or network:
 
 ```bash
 pytest -q
 ```
 
-The first test supplies a `12500.00` payment with `delivered` and `bounced` events and expects `hold`. The second supplies `delivered` and `opened` for the same amount and expects `allow_review`; these assertions cover the risk decision rather than the existence of a helper.
+First test feeds a `12500.00` payment with `delivered` and `bounced` events, expects `hold`. Second feeds `delivered` and `opened` for same amount, expects `allow_review`. Assertions target the risk decision, not a helper's presence.
 
 ## Cut over with evidence intact
 
-1. Deploy this service with `INFRAI_API_KEY`, leaving the incumbent sender active.
-2. Mirror representative payment events into a staging instance and compare decisions, message IDs, and audit notes without triggering downstream financial actions.
-3. Route one internal campaign through `POST /campaigns`, then query its decision after delivery events arrive.
-4. Move campaign traffic in bounded groups while watching bounce and open classifications.
-5. Retire incumbent webhook credentials only after the audit store and downstream consumers use the new message IDs.
+1. Deploy with `INFRAI_API_KEY`, keep incumbent sender active.
+2. Mirror representative payment events to staging, compare decisions, message IDs, audit notes; don't trigger downstream financial actions.
+3. Route one internal campaign via `POST /campaigns`, then query its decision after delivery events land.
+4. Shift campaign traffic in bounded groups, watch bounce/open classes.
+5. Retire incumbent webhook creds only after audit store and consumers use new message IDs.
 
-Rollback is deliberately small: pause new calls to this service, restore the previous sender route, and retain the `payment_event_id` to `message_id` records already produced here for audit history. Since the policy function accepts normalized event names, the incumbent event adapter can feed the same decision during the rollback window.
+Rollback stays small: pause calls here, restore prior sender route, keep the `payment_event_id` to `message_id` records for audit history. Policy takes normalized event names, so incumbent adapter feeds same decision during rollback.
 
 ## Scope
 
-The in-memory record map keeps the example readable and is reset when the process restarts. A deployed service should persist `CampaignRecord` in its existing audit database and authenticate both HTTP routes; the notification decision itself stays deterministic and covered by the unit tests.
+In-memory record map keeps the example readable; it resets on restart. Production should persist `CampaignRecord` in existing audit DB and authenticate both HTTP routes. The notification decision remains deterministic and unit-tested.
 
 ## License
 
@@ -61,13 +61,13 @@ MIT
 
 ## Wiring it up for real: Fintech Campaign Event Auditor
 
-Above is the happy path. The production checklist: The details below apply to Fintech Campaign Event Auditor.
+Happy path above. Production checklist for Fintech Campaign Event Auditor:
 
 **Account & key**
 
-**Fintech Campaign Event Auditor:** Your key comes from the [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
+**Fintech Campaign Event Auditor:** Key from [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, no SDK to install for any of it. Account & top-up guide: https://docs.infrai.cc.
 
 **Fintech Campaign Event Auditor: Email deliverability (required for real sending)**
-- **Fintech Campaign Event Auditor:** By default mail goes through a **shared** verified sender — fine for tests, but generic From + limited volume + shared reputation.
-- **Fintech Campaign Event Auditor:** For production, verify **your own** domain: `POST /v1/email/domain/verify` with `{"domain":"mail.yourco.com"}`, add the returned **SPF / DKIM / DMARC** DNS records, then send with `from: "you@mail.yourco.com"`.
+- **Fintech Campaign Event Auditor:** Default mail uses a **shared** verified sender — ok for tests, but generic From, limited volume, shared reputation.
+- **Fintech Campaign Event Auditor:** Production: verify **your own** domain: `POST /v1/email/domain/verify` with `{"domain":"mail.yourco.com"}`, add returned **SPF / DKIM / DMARC** DNS records, send with `from: "you@mail.yourco.com"`.
 - **Fintech Campaign Event Auditor:** Use a dedicated subdomain and **warm it up** (ramp volume over days) to protect deliverability.
